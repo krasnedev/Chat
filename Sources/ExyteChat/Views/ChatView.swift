@@ -685,12 +685,6 @@ public extension ChatView {
         return view
     }
 
-    func setBackgroundOverride(_ background: View) -> ChatView {
-        var view = self
-        view.backgroundOverride = background
-        return view
-    }
-
     /// Provide a custom async transcriber. Given a local file URL, return transcript text.
     /// Usage:
     /// .recordingTranscriber { url in await myService.transcribe(url) }
