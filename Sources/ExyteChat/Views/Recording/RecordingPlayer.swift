@@ -41,7 +41,7 @@ final actor RecordingPlayer: ObservableObject {
         }
     }
 
-    private let audioSession = AVAudioSession()
+    private let audioSession = AVAudioSession.sharedInstance()
     private var player: AVPlayer?
     private var timeObserver: Any?
 

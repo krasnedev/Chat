@@ -143,13 +143,19 @@ final class InputViewModel: ObservableObject {
             if await recorder.isRecording { return }
             attachments.recording = Recording()
             let url = await recorder.startRecording { [weak self] duration, samples in
-                self?.attachments.recording?.duration = duration
-                self?.attachments.recording?.waveformSamples = samples
+                guard let self else { return }
+                var updated = self.attachments.recording ?? Recording()
+                updated.duration = duration
+                updated.waveformSamples = samples
+                self.attachments.recording = updated
             }
             if state == .waitingForRecordingPermission {
                 state = .isRecordingTap
             }
-            attachments.recording?.url = url
+            if var rec = attachments.recording {
+                rec.url = url
+                attachments.recording = rec
+            }
         }
     }
 }
