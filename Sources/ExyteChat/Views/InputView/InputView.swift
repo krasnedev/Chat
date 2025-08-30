@@ -50,7 +50,7 @@ public enum InputViewState: Sendable {
 
     var canSend: Bool {
         switch self {
-        case .hasTextOrMedia, .hasRecording, .isRecordingTap, .playingRecording, .pausedRecording: return true
+        case .hasTextOrMedia, .hasRecording, .isRecordingTap, .isRecordingHold, .playingRecording, .pausedRecording: return true
         default: return false
         }
     }
@@ -166,7 +166,7 @@ struct InputView: View {
             case .hasRecording, .playingRecording, .pausedRecording:
                 recordWaveform
             case .isRecordingHold:
-                swipeToCancel
+                recordingInProgress
             case .isRecordingTap:
                 recordingInProgress
             default:
@@ -379,39 +379,6 @@ struct InputView: View {
                 .padding(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 8))
         }
         .frameGetter($deleteRecordFrame)
-    }
-    
-    var stopRecordButton: some View {
-        Button {
-            onAction(.stopRecordAudio)
-        } label: {
-            theme.images.recordAudio.stopRecord
-                .viewSize(28)
-                .background(
-                    Capsule()
-                        .fill(Color.white)
-                        .shadow(color: .black.opacity(0.4), radius: 1)
-                )
-        }
-    }
-    
-    var swipeToCancel: some View {
-        HStack {
-            Spacer()
-            Button {
-                onAction(.deleteRecord)
-            } label: {
-                HStack {
-                    theme.images.recordAudio.cancelRecord
-                        .renderingMode(.template)
-                        .foregroundStyle(theme.colors.mainText)
-                    Text(localization.cancelButtonText)
-                        .font(.footnote)
-                        .foregroundColor(theme.colors.mainText)
-                }
-            }
-            Spacer()
-        }
     }
     
     var recordingInProgress: some View {

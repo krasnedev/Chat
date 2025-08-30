@@ -113,7 +113,7 @@ final class InputViewModel: ObservableObject {
             }
         case .recordAudioHold:
             Task {
-                state = await recorder.isAllowedToRecordAudio ? .isRecordingHold : .waitingForRecordingPermission
+                state = await recorder.isAllowedToRecordAudio ? .isRecordingTap : .waitingForRecordingPermission
                 recordAudio()
             }
         case .recordAudioLock:
