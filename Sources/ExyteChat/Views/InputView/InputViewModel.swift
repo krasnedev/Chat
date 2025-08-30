@@ -21,7 +21,6 @@ final class InputViewModel: ObservableObject {
     @Published var showActivityIndicator = false
 
     // removed playback support
-    var recordingPlayer: RecordingPlayer? = nil
     var didSendMessage: ((DraftMessage) -> Void)?
     var recordingTranscriber: ((URL) async -> String?)?
 
