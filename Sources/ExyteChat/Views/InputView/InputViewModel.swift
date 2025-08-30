@@ -133,7 +133,7 @@ final class InputViewModel: ObservableObject {
                 attachments.recording = nil
             }
         case .playRecord:
-            // playback removed
+            break
         case .pauseRecord:
             state = .pausedRecording
             // playback removed
