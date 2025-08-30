@@ -172,9 +172,7 @@ public struct ChatView<MessageContent: View, InputViewContent: View, MenuAction:
     
     public var body: some View {
         mainView
-            .background(chatBackground())
             .environmentObject(keyboardState)
-        
             .fullScreenCover(isPresented: $viewModel.fullscreenAttachmentPresented) {
                 let attachments = sections.flatMap { section in section.rows.flatMap { $0.message.attachments } }
                 let index = attachments.firstIndex { $0.id == viewModel.fullscreenAttachmentItem?.id }
@@ -501,35 +499,6 @@ public struct ChatView<MessageContent: View, InputViewContent: View, MenuAction:
         isShowingMenu = false
     }
     
-    private func chatBackground() -> some View {
-        Group {
-            
-            if let background = theme.images.background {
-                
-                switch (isLandscape(), colorScheme) {
-                case (true, .dark):
-                    background.landscapeBackgroundDark
-                        .resizable()
-                        .ignoresSafeArea(background.safeAreaRegions, edges: background.safeAreaEdges)
-                case (true, .light):
-                    background.landscapeBackgroundLight
-                        .resizable()
-                        .ignoresSafeArea(background.safeAreaRegions, edges: background.safeAreaEdges)
-                case (false, .dark):
-                    background.portraitBackgroundDark
-                        .resizable()
-                        .ignoresSafeArea(background.safeAreaRegions, edges: background.safeAreaEdges)
-                case (false, .light):
-                    background.portraitBackgroundLight
-                        .resizable()
-                        .ignoresSafeArea(background.safeAreaRegions, edges: background.safeAreaEdges)
-                }
-            } else {
-                theme.colors.mainBG
-            }
-        }
-    }
-    
     private func isLandscape() -> Bool {
         return UIDevice.current.orientation.isLandscape
     }
@@ -713,6 +682,12 @@ public extension ChatView {
     func setRecorderSettings(_ settings: RecorderSettings) -> ChatView {
         var view = self
         view.recorderSettings = settings
+        return view
+    }
+
+    func setBackgroundOverride(_ background: View) -> ChatView {
+        var view = self
+        view.backgroundOverride = background
         return view
     }
 
