@@ -125,12 +125,15 @@ final actor RecordingPlayer: ObservableObject {
         self.internalPlaying = isPlaying
     }
 
-    @MainActor
-    private func updateProgressFromPlayer() {
-        guard let player else { return }
-        duration = player.duration
-        progress = duration > 0 ? player.currentTime / duration : 0
-        secondsLeft = max(duration - player.currentTime, 0).rounded()
+    private func updateProgressFromPlayer() async {
+        guard let player = self.player else { return }
+        let dur = player.duration
+        let current = player.currentTime
+        await MainActor.run {
+            duration = dur
+            progress = dur > 0 ? current / dur : 0
+            secondsLeft = max(dur - current, 0).rounded()
+        }
     }
 
     private func startProgressTimer() {
@@ -140,9 +143,7 @@ final actor RecordingPlayer: ObservableObject {
             self.progressTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
                 Task { [weak self] in
                     guard let self else { return }
-                    await MainActor.run {
-                        self.updateProgressFromPlayer()
-                    }
+                    await self.updateProgressFromPlayer()
                     if let player = await self.player, !player.isPlaying {
                         await self.setPlayingState(false)
                         await self.invalidateProgressTimer()
