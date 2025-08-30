@@ -22,7 +22,7 @@ final class InputViewModel: ObservableObject {
 
     var recordingPlayer: RecordingPlayer?
     var didSendMessage: ((DraftMessage) -> Void)?
-    var recordingTranscriber: ((URL) async -> String?)?
+    var recordingTranscriber: (@Sendable (URL) async -> String?)?
 
     private var recorder = Recorder()
 

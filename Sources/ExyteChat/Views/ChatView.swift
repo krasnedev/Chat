@@ -126,7 +126,8 @@ public struct ChatView<MessageContent: View, InputViewContent: View, MenuAction:
     var messageFont = UIFontMetrics.default.scaledFont(for: UIFont.systemFont(ofSize: 15))
     var availableInputs: [AvailableInputType] = [.text, .audio, .giphy, .media]
     var recorderSettings: RecorderSettings = RecorderSettings()
-    var recordingTranscriber: ((URL) async -> String?)?
+    // Optional async transcriber: given a local recording URL, return transcript text
+    var recordingTranscriber: (@Sendable (URL) async -> String?)?
     var listSwipeActions: ListSwipeActions = ListSwipeActions()
     var keyboardDismissMode: UIScrollView.KeyboardDismissMode = .none
     
@@ -712,6 +713,15 @@ public extension ChatView {
     func setRecorderSettings(_ settings: RecorderSettings) -> ChatView {
         var view = self
         view.recorderSettings = settings
+        return view
+    }
+
+    /// Provide a custom async transcriber. Given a local file URL, return transcript text.
+    /// Usage:
+    /// .recordingTranscriber { url in await myService.transcribe(url) }
+    func recordingTranscriber(_ transcriber: @escaping @Sendable (URL) async -> String?) -> ChatView {
+        var view = self
+        view.recordingTranscriber = transcriber
         return view
     }
     
