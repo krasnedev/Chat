@@ -11,7 +11,7 @@ struct RecordWaveformWithButtons: View {
 
     @Environment(\.chatTheme) private var theme
 
-    // removed playback: no player state needed
+    @StateObject var recordPlayer = RecordingPlayer()
 
     // 160 is screen left-padding/right-padding and playButton's width.
     // ensure that the view does not exceed the screen, need to subtract

@@ -20,7 +20,7 @@ final class InputViewModel: ObservableObject {
 
     @Published var showActivityIndicator = false
 
-    // removed playback support
+    var recordingPlayer: RecordingPlayer?
     var didSendMessage: ((DraftMessage) -> Void)?
     var recordingTranscriber: ((URL) async -> String?)?
 
@@ -62,7 +62,7 @@ final class InputViewModel: ObservableObject {
     func send() {
         Task {
             await recorder.stopRecording()
-            // no-op since playback removed
+            await recordingPlayer?.reset()
             if let rec = attachments.recording,
                text.isEmpty,
                let url = rec.url,
@@ -113,18 +113,18 @@ final class InputViewModel: ObservableObject {
             }
         case .recordAudioHold:
             Task {
-                state = await recorder.isAllowedToRecordAudio ? .isRecordingTap : .waitingForRecordingPermission
+                state = await recorder.isAllowedToRecordAudio ? .isRecordingHold : .waitingForRecordingPermission
                 recordAudio()
             }
         case .recordAudioLock:
-            break
+            state = .isRecordingTap
         case .stopRecordAudio:
             Task {
                 await recorder.stopRecording()
                 if let _ = attachments.recording {
                     state = .hasRecording
                 }
-                // no-op since playback removed
+                await recordingPlayer?.reset()
             }
         case .deleteRecord:
             Task {
@@ -133,10 +133,18 @@ final class InputViewModel: ObservableObject {
                 attachments.recording = nil
             }
         case .playRecord:
-            break
+            state = .playingRecording
+            if let recording = attachments.recording {
+                Task {
+                    subscribeRecordPlayer()
+                    await recordingPlayer?.play(recording)
+                }
+            }
         case .pauseRecord:
             state = .pausedRecording
-            // playback removed
+            Task {
+                await recordingPlayer?.pause()
+            }
         case .saveEdit:
             saveEditingClosure?(text)
             reset()
@@ -215,7 +223,16 @@ private extension InputViewModel {
             .store(in: &subscriptions)
     }
 
-    func subscribeRecordPlayer() { }
+    func subscribeRecordPlayer() {
+        Task { @MainActor in
+            if let recordingPlayer {
+                recordPlayerSubscription = recordingPlayer.didPlayTillEnd
+                    .sink { [weak self] in
+                        self?.state = .hasRecording
+                    }
+            }
+        }
+    }
 
     func unsubscribeRecordPlayer() {
         recordPlayerSubscription = nil
