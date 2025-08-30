@@ -535,7 +535,7 @@ public struct ChatView<MessageContent: View, InputViewContent: View, MenuAction:
     
     private static func createLocalization() -> ChatLocalization {
         return ChatLocalization(
-            inputPlaceholder: String(localized: "Type a message..."),
+            inputPlaceholder: String(localized: "Type here..."),
             signatureText: String(localized: "Add signature..."),
             cancelButtonText: String(localized: "Cancel"),
             recentToggleText: String(localized: "Recents"),

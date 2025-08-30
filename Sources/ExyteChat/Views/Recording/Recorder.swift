@@ -13,7 +13,7 @@ final actor Recorder {
     // duration and waveform samples
     typealias ProgressHandler = @Sendable (Double, [CGFloat]) -> Void
 
-    private let audioSession = AVAudioSession()
+    private let audioSession = AVAudioSession.sharedInstance()
     private var audioRecorder: AVAudioRecorder?
     private var audioTimer: Timer?
 
@@ -21,7 +21,7 @@ final actor Recorder {
     private var recorderSettings = RecorderSettings()
 
     var isAllowedToRecordAudio: Bool {
-        AVAudioApplication.shared.recordPermission == .granted
+        audioSession.recordPermission == .granted
     }
 
     var isRecording: Bool {
@@ -45,17 +45,21 @@ final actor Recorder {
     }
     
     private func startRecordingInternal(_ durationProgressHandler: @escaping ProgressHandler) -> URL? {
-        let settings: [String : Any] = [
+        var settings: [String : Any] = [
             AVFormatIDKey: Int(recorderSettings.audioFormatID),
-            AVSampleRateKey: recorderSettings.sampleRate,
+            AVSampleRateKey: Double(recorderSettings.sampleRate),
             AVNumberOfChannelsKey: recorderSettings.numberOfChannels,
-            AVEncoderBitRateKey: recorderSettings.encoderBitRateKey,
-            AVLinearPCMBitDepthKey: recorderSettings.linearPCMBitDepth,
-            AVLinearPCMIsFloatKey: recorderSettings.linearPCMIsFloatKey,
-            AVLinearPCMIsBigEndianKey: recorderSettings.linearPCMIsBigEndianKey,
-            AVLinearPCMIsNonInterleaved: recorderSettings.linearPCMIsNonInterleaved,
             AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
         ]
+
+        if recorderSettings.audioFormatID == kAudioFormatLinearPCM {
+            settings[AVLinearPCMBitDepthKey] = recorderSettings.linearPCMBitDepth
+            settings[AVLinearPCMIsFloatKey] = recorderSettings.linearPCMIsFloatKey
+            settings[AVLinearPCMIsBigEndianKey] = recorderSettings.linearPCMIsBigEndianKey
+            settings[AVLinearPCMIsNonInterleaved] = recorderSettings.linearPCMIsNonInterleaved
+        } else {
+            settings[AVEncoderBitRateKey] = recorderSettings.encoderBitRateKey
+        }
 
         soundSamples = []
         guard let fileExt = fileExtension(for: recorderSettings.audioFormatID) else{
@@ -68,19 +72,21 @@ final actor Recorder {
             try audioSession.setActive(true)
             audioRecorder = try AVAudioRecorder(url: recordingUrl, settings: settings)
             audioRecorder?.isMeteringEnabled = true
+            audioRecorder?.prepareToRecord()
             audioRecorder?.record()
-            durationProgressHandler(0.0, [])
+            DispatchQueue.main.async {
+                durationProgressHandler(0.0, [])
+            }
 
             DispatchQueue.main.async { [weak self] in
-                self?.audioTimer?.invalidate()
-                self?.audioTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                let timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
                     Task {
                         await self?.onTimer(durationProgressHandler)
                     }
                 }
-
-                if let audioTimer = self?.audioTimer {
-                    RunLoop.current.add(audioTimer, forMode: .common)
+                RunLoop.current.add(timer, forMode: .common)
+                Task { [weak self] in
+                    await self?.replaceTimer(with: timer)
                 }
             }
 
@@ -96,10 +102,13 @@ final actor Recorder {
         if let power = audioRecorder?.averagePower(forChannel: 0) {
             // power from 0 db (max) to -60 db (roughly min)
             let adjustedPower = 1 - (max(power, -60) / 60 * -1)
-            soundSamples.append(CGFloat(adjustedPower))
+            let clamped = min(max(adjustedPower, 0), 1)
+            soundSamples.append(CGFloat(clamped))
         }
         if let time = audioRecorder?.currentTime {
-            durationProgressHandler(time, soundSamples)
+            Task { @MainActor in
+                durationProgressHandler(time, soundSamples)
+            }
         }
     }
 
@@ -108,6 +117,11 @@ final actor Recorder {
         audioRecorder = nil
         audioTimer?.invalidate()
         audioTimer = nil
+    }
+
+    private func replaceTimer(with timer: Timer?) {
+        audioTimer?.invalidate()
+        audioTimer = timer
     }
 
     private func fileExtension(for formatID: AudioFormatID) -> String? {
@@ -160,7 +174,7 @@ public struct RecorderSettings : Codable,Hashable {
     public init(audioFormatID: AudioFormatID = kAudioFormatMPEG4AAC,
                 sampleRate: CGFloat = 12000,
                 numberOfChannels: Int = 1,
-                encoderBitRateKey: Int = 128,
+                encoderBitRateKey: Int = 128_000,
                 linearPCMBitDepth: Int = 16,
                 linearPCMIsFloatKey: Bool = false,
                 linearPCMIsBigEndianKey: Bool = false,
@@ -179,7 +193,7 @@ public struct RecorderSettings : Codable,Hashable {
 extension AVAudioSession {
     func requestRecordPermission() async -> Bool {
         await withCheckedContinuation { continuation in
-            AVAudioApplication.requestRecordPermission { granted in
+            AVAudioSession.sharedInstance().requestRecordPermission { granted in
                 continuation.resume(returning: granted)
             }
         }
