@@ -724,6 +724,24 @@ public extension ChatView {
         view.recordingTranscriber = transcriber
         return view
     }
+
+    /// Synchronous transcriber overload. If you have a sync transcriber, use this.
+    /// Usage:
+    /// .recordingTranscriber { url in try? MySyncTranscriber.transcribe(url) }
+    func recordingTranscriber(_ transcriber: @escaping @Sendable (URL) -> String?) -> ChatView {
+        var view = self
+        view.recordingTranscriber = { url in transcriber(url) }
+        return view
+    }
+
+    /// Side-effects-only overload. Useful when you just want to inspect or log the URL.
+    /// Usage:
+    /// .recordingTranscriber { url in print(url) }
+    func recordingTranscriber(_ handler: @escaping @Sendable (URL) -> Void) -> ChatView {
+        var view = self
+        view.recordingTranscriber = { url in handler(url); return nil }
+        return view
+    }
     
     /// Sets the general duration of various message menu animations
     ///
