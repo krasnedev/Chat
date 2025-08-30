@@ -11,7 +11,7 @@ struct RecordWaveformWithButtons: View {
 
     @Environment(\.chatTheme) private var theme
 
-    @StateObject var recordPlayer = RecordingPlayer()
+    // removed playback: no player state needed
 
     // 160 is screen left-padding/right-padding and playButton's width.
     // ensure that the view does not exceed the screen, need to subtract
@@ -30,41 +30,22 @@ struct RecordWaveformWithButtons: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Group {
-                if recordPlayer.playing {
-                    theme.images.message.pauseAudio
-                        .renderingMode(.template)
-                } else {
-                    theme.images.message.playAudio
-                        .renderingMode(.template)
-                }
-            }
+            theme.images.message.playAudio
+                .renderingMode(.template)
             .foregroundColor(colorButton)
             .viewSize(40)
             .circleBackground(colorButtonBg)
-            .onTapGesture {
-                Task {
-                    await recordPlayer.togglePlay(recording)
-                }
-            }
+            .onTapGesture { }
             
             VStack(alignment: .leading, spacing: 5) {
-                RecordWaveformPlaying(samples: recording.waveformSamples, progress: recordPlayer.progress, color: colorWaveform, addExtraDots: false) { progress in
-                    Task {
-                        await recordPlayer.seek(with: recording, to: progress)
-                    }
-                }
+                RecordWaveformPlaying(samples: recording.waveformSamples, progress: recordPlayer.progress, color: colorWaveform, addExtraDots: false) { _ in }
                 Text(DateFormatter.timeString(duration))
                     .font(.caption2)
                     .monospacedDigit()
                     .foregroundColor(colorWaveform)
             }
         }
-        .onDisappear {
-            Task {
-                await recordPlayer.pause()
-            }
-        }
+        .onDisappear { }
     }
 }
 

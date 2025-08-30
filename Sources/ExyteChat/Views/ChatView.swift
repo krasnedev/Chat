@@ -126,6 +126,7 @@ public struct ChatView<MessageContent: View, InputViewContent: View, MenuAction:
     var messageFont = UIFontMetrics.default.scaledFont(for: UIFont.systemFont(ofSize: 15))
     var availableInputs: [AvailableInputType] = [.text, .audio, .giphy, .media]
     var recorderSettings: RecorderSettings = RecorderSettings()
+    var recordingTranscriber: ((URL) async -> String?)?
     var listSwipeActions: ListSwipeActions = ListSwipeActions()
     var keyboardDismissMode: UIScrollView.KeyboardDismissMode = .none
     
@@ -409,6 +410,9 @@ public struct ChatView<MessageContent: View, InputViewContent: View, MenuAction:
         .environmentObject(globalFocusState)
         .onAppear(perform: inputViewModel.onStart)
         .onDisappear(perform: inputViewModel.onStop)
+        .onAppear {
+            inputViewModel.recordingTranscriber = recordingTranscriber
+        }
     }
     
     func messageMenu(_ row: MessageRow) -> some View {

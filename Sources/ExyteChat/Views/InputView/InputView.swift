@@ -85,7 +85,8 @@ struct InputView: View {
     var recorderSettings: RecorderSettings = RecorderSettings()
     var localization: ChatLocalization
     
-    @StateObject var recordingPlayer = RecordingPlayer()
+    // removed: playback player
+    // removed playback
     
     private var onAction: (InputViewAction) -> Void {
         viewModel.inputViewAction()
@@ -127,7 +128,6 @@ struct InputView: View {
         }
         .background(backgroundColor)
         .onAppear {
-            viewModel.recordingPlayer = recordingPlayer
             viewModel.setRecorderSettings(recorderSettings: recorderSettings)
         }
         .onDrag(towards: .bottom, ofAmount: 100...) {
@@ -167,7 +167,7 @@ struct InputView: View {
             case .hasRecording, .playingRecording, .pausedRecording:
                 recordWaveform
             case .isRecordingHold:
-                swipeToCancel
+                recordingInProgress
             case .isRecordingTap:
                 recordingInProgress
             default:
@@ -193,10 +193,8 @@ struct InputView: View {
                 }
             case .isRecordingHold, .isRecordingTap:
                 recordDurationInProcess
-            case .hasRecording:
+            case .hasRecording, .playingRecording, .pausedRecording:
                 recordDuration
-            case .playingRecording, .pausedRecording:
-                recordDurationLeft
             default:
                 Color.clear.frame(width: 8, height: 1)
             }
@@ -248,22 +246,13 @@ struct InputView: View {
                             .disabled(!state.canSend)
                     } else {
                         recordButton
-                            .highPriorityGesture(dragGesture())
+                            .onTapGesture {
+                                onAction(.recordAudioTap)
+                            }
                     }
                 }
                 .compositingGroup()
-                .overlay(alignment: .top) {
-                    Group {
-                        if state == .isRecordingTap {
-                            stopRecordButton
-                        } else if state == .isRecordingHold {
-                            lockRecordButton
-                        }
-                    }
-                    .sizeGetter($overlaySize)
-                    // hardcode 28 for now because sizeGetter returns 0 somehow
-                    .offset(y: (state == .isRecordingTap ? -28 : -overlaySize.height) - 24)
-                }
+                .overlay(alignment: .top) { EmptyView() }
             }
             .viewSize(48)
         }
@@ -476,49 +465,12 @@ struct InputView: View {
             .padding(.trailing, 12)
     }
     
-    var recordDurationLeft: some View {
-        Text(DateFormatter.timeString(Int(recordingPlayer.secondsLeft)))
-            .foregroundColor(theme.colors.mainText)
-            .opacity(0.6)
-            .font(.caption2)
-            .monospacedDigit()
-            .padding(.trailing, 12)
-    }
-    
-    var playRecordButton: some View {
-        Button {
-            onAction(.playRecord)
-        } label: {
-            theme.images.recordAudio.playRecord
-        }
-    }
-    
-    var pauseRecordButton: some View {
-        Button {
-            onAction(.pauseRecord)
-        } label: {
-            theme.images.recordAudio.pauseRecord
-        }
-    }
     
     @ViewBuilder
     var recordWaveform: some View {
         if let samples = viewModel.attachments.recording?.waveformSamples {
             HStack(spacing: 8) {
-                Group {
-                    if state == .hasRecording || state == .pausedRecording {
-                        playRecordButton
-                    } else if state == .playingRecording {
-                        pauseRecordButton
-                    }
-                }
-                .frame(width: 20)
-                
-                RecordWaveformPlaying(samples: samples, progress: recordingPlayer.progress, color: theme.colors.mainText, addExtraDots: true) { progress in
-                    Task {
-                        await recordingPlayer.seek(with: viewModel.attachments.recording!, to: progress)
-                    }
-                }
+                RecordWaveformPlaying(samples: samples, progress: 0, color: theme.colors.mainText, addExtraDots: true) { _ in }
             }
             .padding(.horizontal, 8)
         }
@@ -533,55 +485,7 @@ struct InputView: View {
         }
     }
 
-    func dragGesture() -> some Gesture {
-        DragGesture(minimumDistance: 0.0, coordinateSpace: .global)
-            .onChanged { [state] value in
-                if dragStart == nil {
-                    dragStart = Date()
-                    cancelGesture = false
-                    tapDelayTimer = Timer.scheduledTimer(withTimeInterval: tapDelay, repeats: false) { _ in
-                        if state != .isRecordingTap, state != .waitingForRecordingPermission {
-                            DispatchQueue.main.async {
-                                self.onAction(.recordAudioHold)
-                            }
-                        }
-                    }
-                }
-                
-                if value.location.y < lockRecordFrame.minY,
-                   value.location.x > recordButtonFrame.minX {
-                    cancelGesture = true
-                    onAction(.recordAudioLock)
-                }
-                
-                if value.location.x < UIScreen.main.bounds.width/2,
-                   value.location.y > recordButtonFrame.minY {
-                    cancelGesture = true
-                    onAction(.deleteRecord)
-                }
-            }
-            .onEnded() { value in
-                if !cancelGesture {
-                    tapDelayTimer = nil
-                    if recordButtonFrame.contains(value.location) {
-                        if let dragStart = dragStart, Date().timeIntervalSince(dragStart) < tapDelay {
-                            onAction(.recordAudioTap)
-                        } else if state != .waitingForRecordingPermission {
-                            onAction(.send)
-                        }
-                    }
-                    else if lockRecordFrame.contains(value.location) {
-                        onAction(.recordAudioLock)
-                    }
-                    else if deleteRecordFrame.contains(value.location) {
-                        onAction(.deleteRecord)
-                    } else {
-                        onAction(.send)
-                    }
-                }
-                dragStart = nil
-            }
-    }
+    func dragGesture() -> some Gesture { DragGesture(minimumDistance: .infinity) }
     
     private func isAudioAvailable() -> Bool {
         return availableInputs.contains(AvailableInputType.audio)
