@@ -10,8 +10,8 @@ import Foundation
 
 final actor Recorder {
 
-    // duration and waveform samples
-    typealias ProgressHandler = @Sendable (Double, [CGFloat]) -> Void
+    // duration and waveform samples (always delivered on the main actor)
+    typealias ProgressHandler = @MainActor @Sendable (Double, [CGFloat]) -> Void
 
     private let audioSession = AVAudioSession.sharedInstance()
     private var audioRecorder: AVAudioRecorder?
@@ -74,7 +74,7 @@ final actor Recorder {
             audioRecorder?.isMeteringEnabled = true
             audioRecorder?.prepareToRecord()
             audioRecorder?.record()
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 durationProgressHandler(0.0, [])
             }
 
@@ -94,10 +94,10 @@ final actor Recorder {
         } catch {
             stopRecording()
             return nil
-        }
+        } 
     }
 
-    func onTimer(_ durationProgressHandler: @escaping ProgressHandler) {
+    func onTimer(_ durationProgressHandler: @escaping ProgressHandler) async {
         audioRecorder?.updateMeters()
         if let power = audioRecorder?.averagePower(forChannel: 0) {
             // power from 0 db (max) to -60 db (roughly min)
@@ -106,9 +106,7 @@ final actor Recorder {
             soundSamples.append(CGFloat(clamped))
         }
         if let time = audioRecorder?.currentTime {
-            Task { @MainActor in
-                durationProgressHandler(time, soundSamples)
-            }
+            await durationProgressHandler(time, soundSamples)
         }
     }
 
