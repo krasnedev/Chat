@@ -42,11 +42,11 @@ final actor RecordingPlayer: ObservableObject {
     }
 
     private let audioSession = AVAudioSession.sharedInstance()
-    private var player: AVPlayer?
-    private var timeObserver: Any?
+    private var player: AVAudioPlayer?
+    private var progressTimer: Timer?
 
     init() {
-        try? audioSession.setCategory(.playback)
+        try? audioSession.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
         try? audioSession.overrideOutputAudioPort(.speaker)
     }
 
@@ -71,14 +71,8 @@ final actor RecordingPlayer: ObservableObject {
         let goalTime = recording.duration * progress
         if self.recording == nil {
             setupPlayer(for: recording)
-            Task {
-                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-                await player?.seek(to: CMTime(seconds: goalTime, preferredTimescale: 10))
-                if !internalPlaying { play() }
-            }
-            return
         }
-        player?.seek(to: CMTime(seconds: goalTime, preferredTimescale: 10))
+        player?.currentTime = goalTime
         if !internalPlaying {
             play()
         }
@@ -87,7 +81,7 @@ final actor RecordingPlayer: ObservableObject {
     func seek(to progress: Double) {
         if let recording {
             let goalTime = recording.duration * progress
-            player?.seek(to: CMTime(seconds: goalTime, preferredTimescale: 10))
+            player?.currentTime = goalTime
             if !internalPlaying { play() }
         }
     }
@@ -100,6 +94,7 @@ final actor RecordingPlayer: ObservableObject {
     private func play() {
         try? audioSession.setActive(true)
         player?.play()
+        startProgressTimer()
         internalPlaying = true
         NotificationCenter.default.post(name: .chatAudioIsPlaying, object: self)
     }
@@ -109,12 +104,11 @@ final actor RecordingPlayer: ObservableObject {
         self.recording = recording
 
         NotificationCenter.default.removeObserver(self)
-        timeObserver = nil
-        player?.replaceCurrentItem(with: nil)
+        invalidateProgressTimer()
+        player?.stop()
+        player = try? AVAudioPlayer(contentsOf: url)
+        player?.prepareToPlay()
 
-        let playerItem = AVPlayerItem(url: url)
-        player = AVPlayer(playerItem: playerItem)
-        
         NotificationCenter.default.addObserver(forName: .chatAudioIsPlaying, object: nil, queue: nil) { notification in
             if let sender = notification.object as? RecordingPlayer {
                 Task { [weak self] in
@@ -125,30 +119,6 @@ final actor RecordingPlayer: ObservableObject {
                 }
             }
         }
-
-        NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: playerItem,
-            queue: nil
-        ) { _ in
-            Task { [weak self] in
-                await self?.setPlayingState(false)
-                await self?.player?.seek(to: .zero)
-                await self?.didPlayTillEnd.send()
-            }
-        }
-
-        timeObserver = player?.addPeriodicTimeObserver(
-            forInterval: CMTime(seconds: 0.2, preferredTimescale: 10),
-            queue: nil
-        ) { time in
-            Task { [weak self] in
-                guard let self, let item = await self.player?.currentItem, !item.duration.seconds.isNaN else { return }
-                await MainActor.run {
-                     self.updateProgress(item.duration, time)
-                }
-            }
-        }
     }
 
     private func setPlayingState(_ isPlaying: Bool) {
@@ -156,9 +126,40 @@ final actor RecordingPlayer: ObservableObject {
     }
 
     @MainActor
-    private func updateProgress(_ itemDuration: CMTime, _ time: CMTime) {
-        duration = itemDuration.seconds
-        progress = time.seconds / itemDuration.seconds
-        secondsLeft = (itemDuration - time).seconds.rounded()
+    private func updateProgressFromPlayer() {
+        guard let player else { return }
+        duration = player.duration
+        progress = duration > 0 ? player.currentTime / duration : 0
+        secondsLeft = max(duration - player.currentTime, 0).rounded()
+    }
+
+    private func startProgressTimer() {
+        invalidateProgressTimer()
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.progressTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
+                Task { [weak self] in
+                    guard let self else { return }
+                    await MainActor.run {
+                        self.updateProgressFromPlayer()
+                    }
+                    if let player = await self.player, !player.isPlaying {
+                        await self.setPlayingState(false)
+                        await self.invalidateProgressTimer()
+                        await MainActor.run {
+                            self.didPlayTillEnd.send()
+                        }
+                    }
+                }
+            }
+            if let timer = self.progressTimer {
+                RunLoop.current.add(timer, forMode: .common)
+            }
+        }
+    }
+
+    private func invalidateProgressTimer() {
+        progressTimer?.invalidate()
+        progressTimer = nil
     }
 }

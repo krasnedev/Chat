@@ -115,6 +115,7 @@ final actor Recorder {
         audioRecorder = nil
         audioTimer?.invalidate()
         audioTimer = nil
+        try? audioSession.setActive(false, options: [.notifyOthersOnDeactivation])
     }
 
     private func replaceTimer(with timer: Timer?) {
